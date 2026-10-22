@@ -61,9 +61,13 @@
 
         // ... (resto del código) ...
 
+        // IMPORTANTE: el servidor (libs/unalib.js) escapa el nombre y el texto
+        // y valida el color, por eso aqui solo se inserta lo que llega ya saneado.
         socket.on('Evento-Mensaje-Server', function(msg){
             var msgJson = JSON.parse(msg);
-            var mensajeDisplay = "<b style='color:"+ msgJson.color +"'>" + msgJson.nombre + "</b>: " + msgJson.mensaje;
+            var color = msgJson.color || '#000000';
+            var nombre = msgJson.nombre || '';
+            var mensajeDisplay = "<b style='color:"+ color +"'>" + nombre + "</b>: " + msgJson.mensaje;
             $('#messages').append($('<li>').html(mensajeDisplay));
             window.scrollTo(0, document.body.scrollHeight);
         });

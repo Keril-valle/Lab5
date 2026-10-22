@@ -53,6 +53,10 @@ desktop.ini
 *.swo
 *~
 
+# Herramientas de agentes (no forman parte del proyecto)
+.opencode/
+openspec/
+
 # Otros
 *.pid
 npm-debug.log
