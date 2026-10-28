@@ -70,6 +70,103 @@ describe('unalib', function(){
   });
 
 
+  describe('funcion is_valid_url_video', function(){
+
+    it('deberia devolver true para .mp4, .webm y .ogg', function(){
+
+      assert.equal(val.is_valid_url_video('https://cdn.example.com/clip.mp4'), true);
+      assert.equal(val.is_valid_url_video('https://cdn.example.com/clip.webm'), true);
+      assert.equal(val.is_valid_url_video('https://cdn.example.com/clip.ogg'), true);
+
+    });
+
+    it('deberia devolver true con parametros y extension en mayusculas', function(){
+
+      assert.equal(val.is_valid_url_video('HTTPS://CDN.EXAMPLE.COM/CLIP.MP4?token=abc'), true);
+
+    });
+
+    it('deberia devolver false para una extension desconocida', function(){
+
+      assert.equal(val.is_valid_url_video('https://example.com/archivo.exe'), false);
+
+    });
+
+    it('deberia devolver false para comillas o esquema javascript', function(){
+
+      assert.equal(val.is_valid_url_video('https://a.com/clip.mp4" onerror="alert(1)'), false);
+      assert.equal(val.is_valid_url_video('javascript:alert(1)//https://a.com/clip.mp4'), false);
+
+    });
+
+  });
+
+
+  describe('mensajes de video directo', function(){
+
+    it('deberia clasificar .mp4 como video y generar un reproductor', function(){
+
+      var r = parse(chat('ana', 'https://cdn.example.com/clip.mp4', '#ff0000'));
+
+      assert.equal(r.tipo, 'video');
+      assert.equal(r.mensaje.indexOf('<video controls'), 0);
+      assert.equal(r.mensaje.indexOf('src="https://cdn.example.com/clip.mp4"') > 0, true);
+
+    });
+
+    it('deberia rechazar un video con html inyectado', function(){
+
+      var r = parse(chat('ana', 'https://a.com/clip.mp4"><script>alert(1)</script>', '#ff0000'));
+
+      assert.equal(r.tipo, 'texto');
+      assert.equal(r.mensaje.indexOf('<video'), -1);
+      assert.equal(r.mensaje.indexOf('<script'), -1);
+
+    });
+
+  });
+
+
+  describe('normalizacion de entrada', function(){
+
+    it('deberia eliminar caracteres de control del mensaje', function(){
+
+      var r = parse(chat('ana', 'hola\u0000mu\u0007ndo', '#ff0000'));
+
+      assert.equal(r.mensaje, 'holamundo');
+      assert.equal(r.tipo, 'texto');
+
+    });
+
+    it('deberia normalizar un nombre que no es string', function(){
+
+      var r = parse(chat(123, 'hola', '#ff0000'));
+
+      assert.equal(r.nombre, 'Anomimo');
+
+    });
+
+    it('deberia normalizar un mensaje que no es string', function(){
+
+      var r = parse(JSON.stringify({ nombre: 'ana', mensaje: { texto: 'hola' }, color: '#ff0000' }));
+
+      assert.equal(r.mensaje, '');
+      assert.equal(r.tipo, 'texto');
+
+    });
+
+    it('deberia tratar el JSON null como mensaje vacio', function(){
+
+      var r = parse('null');
+
+      assert.equal(r.mensaje, '');
+      assert.equal(r.tipo, 'texto');
+
+    });
+
+  });
+
+
   describe('proteccion contra inyeccion de scripts', function(){
 
     it('escapeHtml convierte los caracteres especiales de HTML', function(){
@@ -134,6 +231,19 @@ describe('unalib', function(){
       var r = parse(chat('ana', 'hola', "red;}</style><script>alert(1)</script>"));
 
       assert.equal(r.color, '#000000');
+
+    });
+
+    it('deberia rechazar los esquemas data, blob, file y vbscript', function(){
+
+      ['data:text/plain,x', 'blob:https://a.com/x', 'file:///x.jpg', 'vbscript:msgbox(1)'].forEach(function(url){
+        var r = parse(chat('ana', url, '#ff0000'));
+
+        assert.equal(r.tipo, 'texto');
+        assert.equal(r.mensaje.indexOf('<img'), -1);
+        assert.equal(r.mensaje.indexOf('<video'), -1);
+        assert.equal(r.mensaje.indexOf('<iframe'), -1);
+      });
 
     });
 

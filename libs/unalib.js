@@ -29,7 +29,24 @@ module.exports = {
 
       // solo imagenes http(s), sin comillas, espacios ni caracteres de tag
       // para que no se pueda cerrar el atributo src de la etiqueta <img>
-      var re = /^https?:\/\/[^\s"'<>]+\.(?:jpg|gif|png|jpeg|bmp)(?:[?#][^\s"'<>]*)?$/i;
+      var re = /^https?:\/\/[^\s"'<>\u0000-\u001F\u007F]+\.(?:jpg|jpeg|gif|png|bmp)(?:[?#][^\s"'<>\u0000-\u001F\u007F]*)?$/i;
+
+      try {
+        return re.test(url.trim());
+      } catch (e) {
+        console.log(e);
+        return false;
+      }
+    },
+
+    is_valid_url_video: function (url) {
+
+      if (typeof url !== 'string') {
+        return false;
+      }
+
+      // solo archivos de video http(s) con extension conocida
+      var re = /^https?:\/\/[^\s"'<>\u0000-\u001F\u007F]+\.(?:mp4|webm|ogg)(?:[?#][^\s"'<>\u0000-\u001F\u007F]*)?$/i;
 
       try {
         return re.test(url.trim());
@@ -73,7 +90,7 @@ module.exports = {
       var id = this.getYTVideoId(url);
 
       // si el id no es valido no generamos iframe, solo texto escapado
-      if (!id) {
+      if (!id || !this.is_valid_yt_video(url)) {
         return this.escapeHtml(url);
       }
 
@@ -90,6 +107,18 @@ module.exports = {
 
       // escapamos el valor del atributo para que una comilla no rompa el tag
       var tag = '<img src="'+ this.escapeHtml(url.trim()) +'" style="max-height: 400px;max-width: 400px;">';
+      return tag;
+    },
+
+    getVideoTag: function(url){
+
+      // solo permitimos esquemas http/https
+      if (!this.is_safe_url(url)) {
+        return this.escapeHtml(url);
+      }
+
+      // el reproductor usa la url validada como unica fuente
+      var tag = '<video controls style="max-height: 400px;max-width: 400px;" src="'+ this.escapeHtml(url.trim()) +'"></video>';
       return tag;
     },
 
@@ -114,7 +143,15 @@ module.exports = {
       if (typeof url !== 'string') {
         return false;
       }
-      return /^https?:\/\/[^\s"'<>]+$/i.test(url.trim());
+      return /^https?:\/\/[^\s"'<>\u0000-\u001F\u007F]+$/i.test(url.trim());
+    },
+
+    // elimina caracteres de control no imprimibles
+    stripControlChars: function (text) {
+      if (typeof text !== 'string') {
+        return '';
+      }
+      return text.replace(/[\u0000-\u001F\u007F]/g, '');
     },
 
     // el color se usa dentro de un atributo style, por eso solo aceptamos hex
@@ -129,33 +166,43 @@ module.exports = {
     validateMessage: function(msg){
       // Handle invalid input
       if (!msg || typeof msg !== 'string') {
-        return JSON.stringify({ mensaje: '' });
+        return JSON.stringify({ nombre: '', mensaje: '', color: '#000000', tipo: 'texto' });
       }
 
+      // los caracteres de control se descartan antes de interpretar el mensaje
+      var limpio = this.stripControlChars(msg);
       var obj;
 
       try {
-        obj = JSON.parse(msg);
+        obj = JSON.parse(limpio);
 
       } catch (e) {
         // si el mensaje no es JSON devolvemos el texto escapado, nunca crudo
         console.log('Error processing message:', e);
         return JSON.stringify({
           nombre: '',
-          mensaje: this.escapeHtml(msg),
+          mensaje: this.escapeHtml(limpio),
           color: '#000000',
           tipo: 'texto'
         });
       }
 
-      if (!obj || typeof obj !== 'object') {
-        obj = { mensaje: String(obj) };
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+        // primitivos JSON (null, numeros, booleanos) no son mensajes validos
+        return JSON.stringify({
+          nombre: '',
+          mensaje: typeof obj === 'string' ? this.escapeHtml(obj) : '',
+          color: '#000000',
+          tipo: 'texto'
+        });
       }
 
-      var texto = (typeof obj.mensaje === 'string') ? obj.mensaje : '';
+      // solo aceptamos strings; cualquier otro tipo se normaliza a vacio
+      var texto = (typeof obj.mensaje === 'string') ? this.stripControlChars(obj.mensaje) : '';
+      var nombre = (typeof obj.nombre === 'string') ? this.stripControlChars(obj.nombre) : '';
 
       // nombre escapado (nunca se inyecta html)
-      obj.nombre = this.escapeHtml(obj.nombre) || 'Anomimo';
+      obj.nombre = this.escapeHtml(nombre) || 'Anomimo';
 
       // color validado contra la lista blanca de hexadecimales
       obj.color = this.sanitizeColor(obj.color);
@@ -168,6 +215,11 @@ module.exports = {
       else if(this.is_valid_yt_video(texto)){
         console.log("Es un video!")
         obj.mensaje = this.getEmbeddedCode(texto);
+        obj.tipo = 'video';
+      }
+      else if(this.is_valid_url_video(texto)){
+        console.log("Es un video!")
+        obj.mensaje = this.getVideoTag(texto);
         obj.tipo = 'video';
       }
       else{

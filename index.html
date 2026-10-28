@@ -43,6 +43,11 @@
       $(function () {
         var socket = io();
 
+        // marca de conexion para pruebas de integracion/E2E
+        socket.on('connect', function () {
+          document.body.setAttribute('data-chat-connected', 'true');
+        });
+
         // emite evento al servidor
         
         $('form').submit(function(){
